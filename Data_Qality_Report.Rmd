@@ -1,0 +1,371 @@
+---
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+# Aeronautical Events Notebook - Data Quality Report
+
+This notebook is a data quality report. Here, the intention is to discover how reliable, dirty and misformatted the dataset is.
+That's a really important because this step is the our first look into the data, and not only makes us start thinking about the importance of each column, but also let us have cleaner and and more responsive data when using it at other moments.
+
+Our analysis will be more detailed at the Exploratory phase. Meaning, I'll explain more what are the goals and questions to be answered. Therefore, some deleted columns will make more sense at the other notebook.
+ 
+**Source:** https://dados.gov.br/dataset/ocorrencias-aeronauticas-da-aviacao-civil-brasileira
+
+![](https://img.shields.io/badge/open-data-blue)
+<img alt="R" width="26px" src="https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/r/r.png" />
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<!--************************************************-->
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr)
+library(stringr)
+library(readr)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+lookForNA <- function(dataset) {
+  output <- cat('NAs:\n')
+  for (i in 1:ncol(dataset)) {
+    NAs <- sum(is.na(dataset[,i]))
+    if (NAs > 0) {
+      output <- cat(output,
+      colnames(dataset[,i]), ":", NAs, "\n")
+    }
+  }
+  output
+}
+
+
+misformatted <- function(dataset) {
+  output <- cat("Misformatted Columns:\n")
+  for(i in 1:ncol(dataset)) {
+    if(is.character(dataset[[i]])) {
+      misformatted <- sum(!str_detect(dataset[[i]], "[:alpha:]\\S"))
+      if(misformatted > 0) {
+        output <- cat(output,
+                      colnames(dataset[,i]), ":", misformatted, "\n")
+      }
+    }
+  }
+  return(output)
+}
+
+
+replaceNonCharacter <- function(dataset) {
+  for(i in 1:ncol(dataset)) {
+    if(is.character(dataset[[i]])) {
+      misformatted <- sum(!str_detect(dataset[[i]], "[:alpha:]"))
+      if(misformatted > 0) {
+        dataset[[i]][!str_detect(dataset[[i]], "[:alpha:]")] <- ' '
+      }
+    }
+  }
+  return(dataset)
+}
+
+
+```
+
+
+## Data Used
+The data used here is open source and divided in four files. The dataset *ocorrencias*, is the central one, meaning that the other relate to him. It gives us roughly $10$ years of accidents, incidents or serious incidents that took place in Brazil. We are able to know many variables that might have an influence over those events.
+The files are:
+
+* **ocorrencias.csv** - Inside this file there are initially $22$ columns and $6114$ rows. It contemplates data from $10$ years (2010-01-03 to 2021-08-18).
+* **ocorrencia_tipo.csv** - This file has initially $4$ columns and $6283$ rows. 
+* **fator_contribuente.csv** - This one has also $4$ columns and $4485$ rows.
+* **aeronave.csv** - That file has $23$ columns and $6188$ rows.
+
+
+## Data Quality Report
+<details>
+<summary><font size="+2">ocorencias.csv</font></summary>
+
+<details>
+<summary><strong>Data importation and heavy cleaning</strong></summary>
+
+Here, some columns were dropped because they are not useful to our analysis at the level of information we are exploring.
+
+* $11$ Removed - codigo_ocorrencia, codigo_ocorrencia4, ocorrencia_pais,ocorrencia_aerodromo, investigacao_aeronave_liberada, investigacao_status, divulgacao_relatorio_numero, divulgacao_relatorio_publicado, divulgacao_dia_publicacao, total_recomendacoes, total_aeronaves_envolvidas        
+    * Some of them were removed due to zero variance 
+
+```{r message=FALSE, warning=FALSE}
+ocorrencia <- read_delim("C:/Users/LucasBraga/Downloads/ocorrencia.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+
+ocorrencia <- ocorrencia[-c(1,5,11,12,15:21)]
+```
+</details>
+<!-- Importation n cleaning -->
+
+<details>
+<summary><strong>Missing Data</strong></summary>
+I programmed a function to go through every column checking if there are any NULLs or NAs, and here's what I got: 
+```{r}
+result <- lookForNA(ocorrencia)
+```
+Here is possible to see that are $1561$ NA values for the column latitude/longitude and $1$ for hour.
+
+To solve that problem, let's apply a substitution of it by 0, as we have numerical values for this type of information.
+
+```{r}
+ocorrencia$ocorrencia_latitude[is.na(ocorrencia$ocorrencia_latitude)] <- '0'
+ocorrencia$ocorrencia_longitude[is.na(ocorrencia$ocorrencia_longitude)] <- '0'
+
+```
+
+For the variable *ocorrencia_hora* there's an NA and we will leave it like that.
+TODO
+
+</details>
+<!-- Missing Data -->
+
+
+<details>
+<summary><strong>Data Format and Typos</strong></summary>
+After a quick look, the latitude and longitude seems to have multiple typos and formatting problems. Characters that does not represent latitudes, different formatting types and others. Therefore, I built a regex to filter the most acceptable lat/long format, the coordinates one (numbers instead of degrees). 
+
+```{r}
+sum(!str_detect(ocorrencia$ocorrencia_latitude, "^[-]?\\d+[.]\\d+$"))
+```
+
+<font size="1">
+> Disclaimer: I know it is not the finest coordinates regex. Fell free to juice it up.
+
+</font>
+
+
+See? That regular expression caught a bunch values that are not formatted as valid coordinates. Let's see what are those cases:
+
+```{r}
+missformated <- unique(ocorrencia$ocorrencia_latitude[!str_detect(ocorrencia$ocorrencia_latitude, "^[-]?\\d+[.]\\d+$")])
+
+print(missformated, max=10)
+```
+
+Here we see that some of the values are the NA values that were replaced to 0 and the other ones are those misformatted ones.
+
+Now we treat them:
+
+```{r}
+ocorrencia$ocorrencia_latitude[!str_detect(ocorrencia$ocorrencia_latitude, "^[-]?\\d+[.]\\d+$")] <- 0
+ocorrencia$ocorrencia_longitude[!str_detect(ocorrencia$ocorrencia_longitude, "^[-]?\\d+[.]\\d+$")] <- 0
+```
+Unfortunately, we end up with almost half of the latitudes. That is because there were many NA values and many misformatted ones.
+
+Moving on, we guarantee that the two uppercase letters for the state (UF) variable is being respected.
+The ones that misses the two letter pattern are overwritten by empty values. 
+```{r}
+ocorrencia$ocorrencia_uf[!str_detect(ocorrencia$ocorrencia_uf, "[A-Z]")] <- ''
+```
+ 
+Looking for the classification variable:
+```{r}
+unique(ocorrencia$ocorrencia_classificacao)
+```
+Great, no unexpected values.
+
+</details>
+<!-- Data Format and Typos -->
+
+```{r include=FALSE}
+write.csv(ocorrencia, "ocorrencias_clean.csv",row.names = FALSE)
+```
+
+
+</details>
+<!-- ocorrencias.csv -->
+
+
+<details>
+<summary><font size="+2"> aeronave.csv </font></summary>
+
+<details>
+<summary><strong>Data importation and heavy cleaning</strong></summary>
+
+Same as the previous one, some columns were dropped due to lack of importance for our future analysis.
+
+* $11$ Removed - aeronave_matricula, aeronave_operador_categoria, aeronave_modelo, aeronave_tipo_icao, aeronave_pmd, aeronave_pmd_categoria, aeronave_assentos, aeronave_registro_categoria, aeronave_registro_segmento, aeronave_voo_origem, aeronave_voo_destino 
+
+```{r message=FALSE, warning=FALSE}
+aeronave <- read_delim("C:/Users/LucasBraga/Downloads/aeronave.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+
+aeronave <- aeronave[-c(2,3,6,7,10,11,12,16,17,18,19)]
+```
+</details>
+<!-- Importation n cleaning -->
+
+<details>
+<summary><strong>Missing Data</strong></summary>
+
+```{r}
+result <- lookForNA(aeronave)
+```
+Treating the data
+
+```{r}
+aeronave$aeronave_motor_tipo[is.na(aeronave$aeronave_motor_tipo)] <- ''
+aeronave$aeronave_ano_fabricacao[is.na(aeronave$aeronave_ano_fabricacao)] <- 0
+```
+
+</details>
+<!-- Missing data -->
+
+<details>
+<summary><strong>Data Format and Typos</strong></summary>
+
+Let's check the formatation integrity for this dataset:
+
+```{r}
+result <- misformatted(aeronave)
+```
+
+Now we replace those misformatted rows:
+
+```{r}
+aeronave <- replaceNonCharacter(aeronave)
+```
+
+</details>
+<!-- Data Format and Typos -->
+
+```{r include=FALSE}
+write.csv(aeronave, "aeronave_clean.csv",row.names = FALSE)
+```
+
+</details>
+<!-- aeronave.csv -->
+
+
+<details>
+<summary><font size="+2">ocorrencia_tipo.csv</font></summary>
+
+<details>
+<summary><strong>Data importation and heavy cleaning</strong></summary>
+
+Two columns were dropped because they were not useful to our analysis.
+
+* $2$ Removed - ocorrencia_tipo_categoria, taxonomia_tipo_icao
+
+```{r, message=FALSE, warning=FALSE}
+ocorrencia_tipo <- read_delim("C:/Users/LucasBraga/Downloads/ocorrencia_tipo.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+
+ocorrencia_tipo <- ocorrencia_tipo[-c(3,4)]
+
+```
+</details>
+<!--importation-->
+
+<details>
+<summary><strong>Missing Data</strong></summary>
+
+```{r}
+result <- lookForNA(ocorrencia_tipo)
+```
+
+Nothing to treat here.
+
+</details>
+<!-- Missing Data -->
+
+<details>
+<summary><strong>Data Format and Typos</strong></summary>
+```{r}
+result <- misformatted(ocorrencia_tipo)
+```
+Great, no more wrong data formats.
+
+</details>
+
+```{r include=FALSE}
+write.csv(ocorrencia_tipo, "ocorrencias_tipo_clean.csv",row.names = FALSE)
+```
+
+</details> 
+<!--Ocorrencia_tipo.csv-->
+
+
+
+<details>
+<summary><font size="+2">fator_contribuinte.csv</font></summary>
+<details>
+<summary><strong>Data importation and heavy cleaning</strong></summary>
+
+* $2$ Removed - fator_nome, fator_condicionante
+
+Here, those columns were removed due to the unwanted level of detail that they bring for us.
+
+```{r, message=FALSE, warning=FALSE}
+fator_contribuinte <- read_delim("C:/Users/LucasBraga/Downloads/fator_contribuinte.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+fator_contribuinte <- fator_contribuinte[-c(2,4)]
+```
+
+</details>
+<!--importation-->
+
+<details>
+<summary><strong>Missing Data</strong></summary>
+```{r}
+result <- lookForNA(fator_contribuinte)
+```
+As we can see, no missing data here.
+</details>
+<!--Missing data-->
+
+
+<details>
+<summary><strong> Data Format and Typos </strong></summary>
+
+```{r}
+result <- misformatted(fator_contribuinte)
+```
+
+```{r}
+unique(fator_contribuinte$fator_aspecto[!str_detect(fator_contribuinte$fator_aspecto, "[:alpha:]")])
+```
+Non compatible values for those columns, I'll change to blank value instead of removing the lines.
+
+```{r}
+fator_contribuinte$fator_aspecto[!str_detect(fator_contribuinte$fator_aspecto, "[:alpha:]")] <- ''
+fator_contribuinte$fator_area[!str_detect(fator_contribuinte$fator_aspecto, "[:alpha:]")] <- ''
+
+```
+
+</details>
+<!--Missing data-->
+
+```{r include=FALSE}
+write.csv(fator_contribuinte, "fator_contribuinte_clean.csv",row.names = FALSE)
+```
+
+</details>
+<!--fator_contribuinte-->
+
+## Conclusions
+
+This dataset provides great ammount of missing values (NAs) and also a great number of misformatted values. This can bring us to question the reliability on numeric columns. For example, the manufacture year column has many invalid year. Therefore, is hard to know whether the zero values at the number of victims column is really supposed to be zero.
+
+Besides the quality of the data, some columns were dropped due to it's unwanted level of detail for our goal, no variance and for being id columns with no usage.
+
+---
+<div style="text-align: left"> 
+  <font size="2">
+    Produced by: **Lucas Fiorini Braga**<br>
+    Available at: <br>
+    Connect with me:&nbsp; [<img alt="LinkedIn" width="19px"         src="https://cdn.jsdelivr.net/npm/simple-icons@v3/icons/linkedin.svg" />][linkedin]
+  </font>
+</div>
+[linkedin]: https://www.linkedin.com/in/lucas-fiorini-braga-97b231186/?locale=en_US

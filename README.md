@@ -16,9 +16,9 @@ This work aims to do a data cleaning process at the Brazilian Aeronautical Event
 
 <div style="text-align: left"> 
   <font size="2">
-    Produced by: **Lucas Fiorini Braga**<br>
-    Available at: <br>
-    Connect with me:&nbsp; [<img alt="LinkedIn" width="19px"         src="https://cdn.jsdelivr.net/npm/simple-icons@v3/icons/linkedin.svg" />][linkedin]
+    Produced by: Lucas Fiorini Braga<br>
+    Available at: https://public.tableau.com/app/profile/lucas.fiorini/viz/AeronauticalOccurences/Dashboard1
+    Connect with me:&nbsp; [<img alt="linkedin" width="19px" src="https://cdn.jsdelivr.net/npm/simple-icons@v3/icons/linkedin.svg" />][linkedin]
   </font>
 </div>
 [linkedin]: https://www.linkedin.com/in/lucas-fiorini-braga-97b231186/?locale=en_US
